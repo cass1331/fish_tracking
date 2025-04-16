@@ -342,15 +342,8 @@ for dictionary in super_dict:
     dictionary['speed'].append(fish_speed(dictionary['head'][i-1:i+1]))
     dictionary['angular_velocity'].append(angular_velocity(dictionary['head'][i-1:i+1],dictionary['speed'][i-1:i+1]))
     dictionary['midline_offset'].append(midline_offset(dictionary['tail'][i-1:i+1], dictionary['centroid'][i-1:i+1]))
-  # 
-  print('head length: ' + str(len(dictionary['head'])))
-  print('tail length: ' + str(len(dictionary['tail'])))
-  print('speed length: ' + str(len(dictionary['speed'])))
-  print('centroid length: ' + str(len(dictionary['centroid'])))
-  print('angular_velocity length: ' + str(len(dictionary['angular_velocity'])))
-  print('midline_offset length: ' + str(len(dictionary['midline_offset'])))
-
-#   dictionary['lighting'] = ['dark' if frame in frames_dark else 'light' for frame in range(len(video_array))]
+    
+  dictionary['lighting'] = ['dark' if frame in frames_dark else 'light' for frame in range(len(video_array))]
 
 
 #you might want to save dataframe to excel file like this [it's buggy for some reason. think it might be a 
