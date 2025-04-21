@@ -7,6 +7,9 @@ If everything works *properly* this should take a pretrained YOLO classification
 - When the belly glow is too bright. I have figured out some ways to 'patch' it: Gaussian blur, erosion and dilation, flood fill... but none of these solutions seems to be perfect
 - When a fish 'disappears' from YOLO detection, the tracking arrays are of different length and the pd dataframe cannot be created.
 
+## Possible fixes??
+- Set max number of fish (probably ~5) and keep testing for new detections every frame (might be slow)
+- Keep looking for ways to clean the image
 Nevertheless the trajectories are usually mostly accurate (especially in the good lighting, cleaner background examples) and some smoothing of the overall trajectory may help with the accuracy.
 
 UPDATE 04.21.2025: Adding histogram equalization to videos improves track quality. 
