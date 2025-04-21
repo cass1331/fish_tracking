@@ -11,6 +11,8 @@ import pandas as pd
 import math
 from collections import defaultdict
 
+#######try adding the histogram equalization to the videos!!!
+
 ######LOAD VIDEO AND MODEL#########
 def load_video_as_3d_sequence(video_path):
     cap = cv2.VideoCapture(video_path)
@@ -42,6 +44,18 @@ for frame in video_array:
   clean_frame = clean_frame.astype(np.uint8)
   clean_video.append(clean_frame)
 clean_video = np.array(clean_video)
+
+
+########EQUALIZE VALUES##############
+#equalize values in video
+equalized_list = []
+for frame in video_array:
+  gray_picture_array = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+  gray_equalized_image = cv2.equalizeHist(gray_picture_array)
+  equalized_image = cv2.cvtColor(gray_equalized_image, cv2.COLOR_GRAY2BGR)
+  equalized_list.append(equalized_image)
+equalized_array = np.array(equalized_list)
+video_array = equalized_array
 
 ##########LIGHT DETECTION############
 #getting the frames where
@@ -185,15 +199,15 @@ def get_structure(frame, box):
   path_y = np.array(path_y)
 
 #[needs to be debugged]
-  t = np.linspace(0,1,path_x.size)
-  spl_x = UnivariateSpline(t, path_x, s=1)
-  spl_y = UnivariateSpline(t, path_y, s=1)
-  t_smooth = np.linspace(t.min(), t.max(), 20)
-  x_smooth = np.array(spl_x(t_smooth), dtype=int)
-  y_smooth = np.array(spl_y(t_smooth), dtype=int)
-  longest_path = list(zip(y_smooth,x_smooth))
+  # t = np.linspace(0,1,path_x.size)
+  # spl_x = UnivariateSpline(t, path_x, s=1)
+  # spl_y = UnivariateSpline(t, path_y, s=1)
+  # t_smooth = np.linspace(t.min(), t.max(), 20)
+  # x_smooth = np.array(spl_x(t_smooth), dtype=int)
+  # y_smooth = np.array(spl_y(t_smooth), dtype=int)
+  # longest_path = list(zip(y_smooth,x_smooth))
 
-#   longest_path = list(zip(path_y,path_x)) 
+  longest_path = list(zip(path_y,path_x)) 
   binaryImage, x,y = endpoints_from_skeleton(skeleton,longest_path)
 
 #   print(x,y)
@@ -226,6 +240,7 @@ def get_structure(frame, box):
                     'orientation']
       region_table = pd.DataFrame(regionprops_table(label_im, clean_image,
                   properties=properties))
+      print(len(region_table))
       idx = list(region_table['area']).index(min(list(region_table['area'])))
       centroid = (int(regions[idx].centroid[0]), int(regions[idx].centroid[1]))
       clean_image = flood_fill(clean_image,centroid,0)
@@ -250,6 +265,100 @@ def get_structure(frame, box):
  
   return binaryImage, head, tail
 
+#get skeleton and endpoints given a video frame [BEST VERSION]
+def get_structure1(frame, box):
+  x1, y1, x2, y2 = box
+  #blur it a bit to cover the belly
+  frame = cv2.GaussianBlur(frame, (21,21), 0)
+  # frame = cv2.GaussianBlur(frame, (9,9), 0) #try decreasing blur strength
+  # Crop the object using the bounding box coordinates
+  ultralytics_crop_object = frame[int(y1):int(y2), int(x1):int(x2)]
+  #Fix the contrast
+  # ultralytics_crop_object = ((ultralytics_crop_object - ultralytics_crop_object.min()) / (ultralytics_crop_object.max()-ultralytics_crop_object.min())) *255
+
+  # Save the cropped object as an image
+  cv2.imwrite('ultralytics_crop.jpg', ultralytics_crop_object)
+  #Read back in + threshold
+  image = cv2.imread('ultralytics_crop.jpg', 0)
+  _, clean_image = cv2.threshold(image, np.mean(image) - 10, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+  #pad image for later
+  top, bottom, left, right = 10, 10, 10, 10
+  color = [255,255,255]
+  clean_image = cv2.copyMakeBorder(clean_image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
+
+  # if we only got one point, try filling the hole
+  # if caught_you or np.linalg.norm(np.array(p1) - np.array(p2)) < 20:
+
+  _, clean_image = cv2.threshold(image, np.mean(image) - 10, 255, cv2.THRESH_BINARY)
+  label_im = label(clean_image)
+  regions = regionprops(label_im)
+  properties = ['area','convex_area','bbox_area', 'extent',
+            'mean_intensity', 'solidity', 'eccentricity',
+            'orientation']
+  region_table = pd.DataFrame(regionprops_table(label_im, clean_image,
+            properties=properties))
+  if len(region_table) > 1:
+    idx = list(region_table['area']).index(min(list(region_table['area'])))
+    centroid = (int(regions[idx].centroid[0]), int(regions[idx].centroid[1]))
+    clean_image = flood_fill(clean_image,centroid,0)
+
+  #get skeleton
+  skeleton = skeletonize(1 - (clean_image / 255))
+  skel = np.array(skeleton)
+  skel = skel.astype(np.uint8)*255
+
+  graph = build_graph(skeleton)
+  start_node = next(iter(graph))
+  org_longest_path = dfs_longest_path(graph, start_node)
+  path_y, path_x = zip(*org_longest_path)
+  path_x = np.array(path_x)
+  path_y = np.array(path_y)
+
+  t = np.linspace(0,1,path_x.size)
+  spl_x = UnivariateSpline(t, path_x, s=1)
+  spl_y = UnivariateSpline(t, path_y, s=1)
+  t_smooth = np.linspace(t.min(), t.max(), 20)
+  x_smooth = np.array(spl_x(t_smooth), dtype=int)
+  y_smooth = np.array(spl_y(t_smooth), dtype=int)
+  longest_path = list(zip(y_smooth,x_smooth))
+
+  binaryImage, x,y = endpoints_from_skeleton(skeleton,longest_path)
+
+  print(x,y)
+  
+  caught_you = False
+  try:
+    p1 = x[0],y[0]
+    p2 = x[-1],y[-1]
+  except:
+    caught_you = True
+  #if euclidean distance between the head and tail isis too small
+  #try the non-smoothed version
+  if caught_you or np.linalg.norm(np.array(p1) - np.array(p2)) < 20:
+    binaryImage, x,y = endpoints_from_skeleton(skeleton,org_longest_path)
+    print(x,y)
+    plt.imshow(clean_image)
+    p1 = x[0],y[0]
+    p2 = x[-1],y[-1]
+
+   
+
+  #distinguish the head from the tail
+  head, tail = head_tail_distinguisher(clean_image, org_longest_path, p1,p2)
+  head = (head[1]+x1-10,head[0]+y1-10)
+  tail = (tail[1]+x1-10,tail[0]+y1-10)
+  # first_box = clean_image[int(p1[1]-5):int(p1[1]+5), int(p1[0]-5):int(p1[0]+5)]
+  # last_box = clean_image[int(p2[1]-5):int(p2[1]+5), int(p2[0]-5):int(p2[0]+5)]
+  # head=None
+  # tail = None
+  # if np.mean(first_box) < np.mean(last_box):
+  #     head = (p1[1]+x1-10,p1[0]+y1-10) # back to og coordinates
+  #     tail = (p2[1]+x1-10,p2[0]+y1-10)
+  # else:
+  #     head = (p2[1]+x1-10,p2[0]+y1-10)
+  #     tail = (p1[1]+x1-10,p1[0]+y1-10)
+
+  return binaryImage, head, tail
 ########END TRACKING HELPERS#######
 
 ##########FISH DETECTION###########
